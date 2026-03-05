@@ -1,33 +1,71 @@
-"""
-Configuration mapping loaded from environment variables and code-first defaults.
-"""
 import os
 from pathlib import Path
-from dotenv import load_dotenv
+from typing import Tuple, Union
 import torch
-
+from dotenv import load_dotenv
+from pydantic import BaseModel
+try:
+    from pydantic_settings import BaseSettings, SettingsConfigDict
+    PYDANTIC_V2 = True
+except ImportError:
+    from pydantic import BaseSettings
+    PYDANTIC_V2 = False
 load_dotenv()
-
-BASE_DIR = Path(__file__).parent.parent
-RAW_DATA_PATH = Path(os.getenv("RAW_DATA_PATH", str(BASE_DIR / "data" / "raw")))
-PROCESSED_DATA_PATH = Path(os.getenv("PROCESSED_DATA_PATH", str(BASE_DIR / "data" / "processed")))
-MODEL_CHECKPOINTS = Path(os.getenv("MODEL_CHECKPOINTS", str(BASE_DIR / "perception" / "checkpoints")))
-
-# Model hyperparameters
-IMG_SIZE = 256
-BATCH_SIZE = 32
-LR = 1e-4
-LATENT_DIM = 64
-BETA = 4.0
-
-# Causal params
-DAG_UPDATE_INTERVAL = 500
-N_CAUSAL_CLUSTERS = 16
-INTERVENTION_THRESHOLD = 0.15
-
-# Stream params
-FPS = 30
-BUFFER_SIZE = 10
-
-# Device auto-detection
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+def get_optimal_device() -> str:
+    if torch.cuda.is_available():
+        return 'cuda'
+    elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+        return 'mps'
+    return 'cpu'
+class PathConfig(BaseModel):
+    project_root: Path = Path(__file__).parent.parent.resolve()
+    data_dir: Path = project_root / 'data'
+    raw_dir: Path = data_dir / 'raw'
+    processed_dir: Path = data_dir / 'processed'
+    checkpoint_dir: Path = project_root / 'perception' / 'checkpoints'
+    log_dir: Path = project_root / 'logs'
+    output_dir: Path = project_root / 'output'
+class ModelConfig(BaseModel):
+    img_size: int = 256
+    batch_size: int = 32
+    learning_rate: float = 0.0001
+    latent_dim: int = 64
+    beta: float = 4.0
+    anomaly_threshold: float = 0.5
+    n_causal_clusters: int = 16
+class CausalConfig(BaseModel):
+    dag_update_interval: int = 500
+    intervention_threshold: float = 0.15
+    max_causes: int = 5
+    notears_lambda1: float = 0.01
+    notears_max_iter: int = 100
+    time_slices: int = 3
+class StreamConfig(BaseModel):
+    source: Union[int, str] = 0
+    fps: int = 30
+    buffer_size: int = 10
+    resolution: Tuple[int, int] = (256, 256)
+class DashboardConfig(BaseModel):
+    host: str = 'localhost'
+    port: int = 8000
+    mode: str = 'researcher'
+class CIRCAConfig(BaseSettings):
+    paths: PathConfig = PathConfig()
+    model: ModelConfig = ModelConfig()
+    causal: CausalConfig = CausalConfig()
+    stream: StreamConfig = StreamConfig()
+    dashboard: DashboardConfig = DashboardConfig()
+    device: str = get_optimal_device()
+    if PYDANTIC_V2:
+        model_config = SettingsConfigDict(env_nested_delimiter='__', env_file='.env', extra='ignore')
+    else:
+        class Config:
+            env_nested_delimiter = '__'
+            env_file = '.env'
+            extra = 'ignore'
+_CONFIG_INSTANCE = None
+def get_config() -> CIRCAConfig:
+    global _CONFIG_INSTANCE
+    if _CONFIG_INSTANCE is None:
+        _CONFIG_INSTANCE = CIRCAConfig()
+    return _CONFIG_INSTANCE

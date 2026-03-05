@@ -1,1 +1,87 @@
-{}
+{
+    "domain": "mvtec_industrial",
+    "description": "Expert structural constraints mapped to the 16 semantic causal clusters extracted by CIRCA CNN-B for MVTec anomaly categories.",
+    "tiers": [
+        [
+            "causal_node_0",
+            "causal_node_1",
+            "causal_node_2",
+            "causal_node_3",
+            "causal_node_4"
+        ],
+        [
+            "causal_node_5",
+            "causal_node_6",
+            "causal_node_7",
+            "causal_node_8",
+            "causal_node_9",
+            "causal_node_10"
+        ],
+        [
+            "causal_node_11",
+            "causal_node_12",
+            "causal_node_13",
+            "causal_node_14",
+            "causal_node_15"
+        ]
+    ],
+    "tier_descriptions": {
+        "0": "Root Causes: Inherent object properties, structural materials, overarching lighting context.",
+        "1": "Intermediate Processes: Manufacturing states, orientation, component integration variables.",
+        "2": "Observable Anomalies: Surface effects, localized pixel defects, final visual symptoms."
+    },
+    "forbidden_edges": [
+        [
+            "causal_node_5",
+            "causal_node_0"
+        ],
+        [
+            "causal_node_6",
+            "causal_node_1"
+        ],
+        [
+            "causal_node_11",
+            "causal_node_5"
+        ],
+        [
+            "causal_node_15",
+            "causal_node_2"
+        ],
+        [
+            "causal_node_12",
+            "causal_node_3"
+        ]
+    ],
+    "required_edges": [
+        [
+            "causal_node_0",
+            "causal_node_5"
+        ],
+        [
+            "causal_node_1",
+            "causal_node_7"
+        ],
+        [
+            "causal_node_5",
+            "causal_node_12"
+        ]
+    ],
+    "node_descriptions": {
+        "causal_node_0": "Base Material Texture",
+        "causal_node_1": "Primary Object Shape",
+        "causal_node_2": "Global Illumination",
+        "causal_node_3": "Background Context",
+        "causal_node_4": "Positional Offset",
+        "causal_node_5": "Machining Edge Quality",
+        "causal_node_6": "Component Alignment",
+        "causal_node_7": "Structural Integrity",
+        "causal_node_8": "Surface Coating Density",
+        "causal_node_9": "Thermal Warping Factor",
+        "causal_node_10": "Assembly Tension",
+        "causal_node_11": "Scratch/Gouge Defect",
+        "causal_node_12": "Discoloration/Stain",
+        "causal_node_13": "Missing Component",
+        "causal_node_14": "Foreign Object Debris",
+        "causal_node_15": "Edge Chip/Break"
+    }
+}
