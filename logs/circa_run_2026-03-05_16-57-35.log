@@ -1,0 +1,2 @@
+2026-03-05 16:57:35 | INFO     | [white]Initialized runtime safely bounded to: cpu[/white]
+2026-03-05 16:58:18 | INFO     | [white]Instantiated CNN-A Predictive Bounds. Tracked Params: 25,404,052[/white]

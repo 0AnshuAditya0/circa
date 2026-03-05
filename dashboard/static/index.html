@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>CIRCA | Research Dashboard</title>
+<style>
+  :root {
+    --bg-color: #0a0a0a;
+    --text-color: #e0e0e0;
+    --accent: #00d4ff;
+    --danger: #ff3333;
+    --success: #33ff33;
+    --panel-bg: #1a1a1a;
+    --border: #333;
+  }
+  
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: 'Courier New', Courier, monospace;
+  }
+  
+  body {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+  }
+  
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 2rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-color);
+  }
+  
+  .logo {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: var(--accent);
+    letter-spacing: 2px;
+  }
+
+  .toggle-container {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+  }
+
+  .btn {
+    background: transparent;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    font-weight: bold;
+    text-transform: uppercase;
+  }
+  
+  .btn:hover {
+    background: var(--accent);
+    color: var(--bg-color);
+  }
+  
+  .btn.active {
+    background: var(--accent);
+    color: var(--bg-color);
+  }
+
+  main {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+    position: relative;
+  }
+
+  #operator-mode, #researcher-mode {
+    width: 100%;
+    height: 100%;
+    display: none;
+  }
+
+  #operator-mode.active, #researcher-mode.active {
+    display: flex;
+  }
+
+  #operator-mode {
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    text-align: center;
+  }
+  
+  .status-circle {
+    width: 300px;
+    height: 300px;
+    border-radius: 50%;
+    border: 15px solid var(--success);
+    margin-bottom: 3rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 3rem;
+    font-weight: bold;
+    color: var(--success);
+  }
+  
+  .status-circle.anomaly {
+    border-color: var(--danger);
+    color: var(--danger);
+  }
+
+  .op-cause {
+    font-size: 4rem;
+    margin-bottom: 2rem;
+    color: var(--danger);
+  }
+
+  .op-action {
+    font-size: 2.5rem;
+    color: var(--text-color);
+  }
+
+  #researcher-mode {
+    display: none;
+    padding: 2rem;
+    gap: 2rem;
+  }
+
+  .res-left {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--border);
+    background: var(--panel-bg);
+  }
+
+  .image-container {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .image-container img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+  }
+
+  .upload-zone {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.7);
+    border: 2px dashed var(--accent);
+    cursor: pointer;
+    font-size: 1.2rem;
+    z-index: 10;
+  }
+  
+  .upload-zone.hidden {
+    display: none;
+  }
+
+  .res-right {
+    width: 400px;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .panel {
+    border: 1px solid var(--border);
+    background: var(--panel-bg);
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .panel-title {
+    color: var(--accent);
+    font-size: 1.1rem;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.5rem;
+    text-transform: uppercase;
+  }
+
+  .bar-container {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .bar-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.9rem;
+  }
+
+  .bar-bg {
+    width: 100%;
+    height: 10px;
+    background: var(--bg-color);
+    margin-bottom: 1rem;
+  }
+
+  .bar-fill {
+    height: 100%;
+    background: var(--accent);
+  }
+
+  .dag-stat {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+  }
+
+  .json-view {
+    font-size: 0.8rem;
+    white-space: pre-wrap;
+    overflow-y: auto;
+    max-height: 150px;
+    background: var(--bg-color);
+    padding: 0.5rem;
+    border: 1px solid var(--border);
+  }
+
+  .latency-badge {
+    position: absolute;
+    bottom: 1rem;
+    right: 1rem;
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
+    padding: 0.5rem 1rem;
+    font-size: 0.9rem;
+    color: var(--accent);
+  }
+
+  input[type="file"] {
+    display: none;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">CIRCA_v1.0</div>
+  <div class="toggle-container">
+    <button class="btn" id="btn-upload" onclick="document.getElementById('file-input').click()">UPLOAD IMAGE</button>
+    <button class="btn active" id="btn-op">OPERATOR</button>
+    <button class="btn" id="btn-res">RESEARCHER</button>
+  </div>
+</header>
+
+<main>
+  <div id="operator-mode" class="active">
+    <div class="status-circle" id="op-status-circle">NORMAL</div>
+    <div class="op-cause" id="op-cause" style="display: none;"></div>
+    <div class="op-action" id="op-action">SYSTEM READY</div>
+  </div>
+
+  <div id="researcher-mode">
+    <div class="res-left">
+      <div class="image-container" id="res-image-container">
+        <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()">
+          CLICK OR DROP IMAGE HERE
+        </div>
+        <img id="res-image" src="" style="display: none;" />
+      </div>
+    </div>
+    
+    <div class="res-right">
+      <div class="panel">
+        <div class="panel-title">CAUSAL ATTRIBUTION</div>
+        <div class="bar-container" id="res-causes">
+          <div>Waiting for input...</div>
+        </div>
+      </div>
+      
+      <div class="panel">
+        <div class="panel-title">SCM TOPOGRAPHY</div>
+        <div class="dag-stat"><span>DAG Age (frames):</span><span id="res-dag-age">0</span></div>
+        <div class="dag-stat"><span>Edges Tracked:</span><span>Auto</span></div>
+        <div class="dag-stat"><span>Confidence:</span><span id="res-conf">0.000</span></div>
+      </div>
+
+      <div class="panel" style="flex: 1; overflow: hidden;">
+        <div class="panel-title">JSON DIAGNOSTICS (TOGGLE)</div>
+        <button class="btn" onclick="toggleJson()" style="margin-bottom: 0.5rem; font-size: 0.8rem;">SHOW/HIDE</button>
+        <div class="json-view" id="res-json" style="display: none;">{}</div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="latency-badge" id="latency-badge">LATENCY: -- ms</div>
+</main>
+
+<input type="file" id="file-input" accept="image/*" />
+
+<script>
+  let currentMode = 'operator';
+
+  document.getElementById('btn-op').addEventListener('click', () => setMode('operator'));
+  document.getElementById('btn-res').addEventListener('click', () => setMode('researcher'));
+
+  function toggleJson() {
+    const el = document.getElementById('res-json');
+    el.style.display = el.style.display === 'none' ? 'block' : 'none';
+  }
+
+  function setMode(mode) {
+    currentMode = mode;
+    document.getElementById('btn-op').classList.toggle('active', mode === 'operator');
+    document.getElementById('btn-res').classList.toggle('active', mode === 'researcher');
+    document.getElementById('operator-mode').classList.toggle('active', mode === 'operator');
+    document.getElementById('researcher-mode').classList.toggle('active', mode === 'researcher');
+  }
+
+  const fileInput = document.getElementById('file-input');
+  fileInput.addEventListener('change', handleFile);
+
+  const uploadZone = document.getElementById('upload-zone');
+  
+  ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+    document.body.addEventListener(eventName, preventDefaults, false);
+  });
+
+  function preventDefaults (e) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+
+  document.body.addEventListener('drop', handleDrop, false);
+
+  function handleDrop(e) {
+    let dt = e.dataTransfer;
+    let files = dt.files;
+    if (files.length) {
+      fileInput.files = files;
+      handleFile();
+    }
+  }
+
+  async function handleFile() {
+    if (!fileInput.files.length) return;
+    const file = fileInput.files[0];
+    
+    document.getElementById('upload-zone').classList.add('hidden');
+    
+    document.getElementById('op-status-circle').textContent = 'ANALYZING';
+    document.getElementById('op-status-circle').className = 'status-circle';
+    document.getElementById('op-status-circle').style.borderColor = '#555';
+    document.getElementById('op-status-circle').style.color = '#555';
+    document.getElementById('op-cause').style.display = 'none';
+    document.getElementById('op-action').textContent = '...';
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const res = await fetch('/analyze', {
+        method: 'POST',
+        body: formData
+      });
+      const data = await res.json();
+      updateUI(data);
+    } catch (err) {
+      alert('Analysis failed');
+    }
+  }
+
+  function updateUI(data) {
+    const isAnomaly = data.anomaly;
+    
+    const circle = document.getElementById('op-status-circle');
+    circle.textContent = isAnomaly ? 'ANOMALY' : 'NORMAL';
+    circle.className = isAnomaly ? 'status-circle anomaly' : 'status-circle';
+    circle.style = ''; 
+
+    if (isAnomaly && data.causes && data.causes.length > 0) {
+      const primary = data.causes[0];
+      const prob = Math.round(primary.probability * 100);
+      document.getElementById('op-cause').style.display = 'block';
+      document.getElementById('op-cause').textContent = `${primary.name.toUpperCase()} \u2014 ${prob}%`;
+      document.getElementById('op-action').textContent = data.operator_action || '\u2192 INITIATE PROTOCOL';
+    } else {
+      document.getElementById('op-cause').style.display = 'none';
+      document.getElementById('op-action').textContent = 'NO INTERVENTION REQUIRED';
+    }
+
+    if (data.heatmap_b64) {
+      const img = document.getElementById('res-image');
+      img.src = 'data:image/jpeg;base64,' + data.heatmap_b64;
+      img.style.display = 'block';
+    }
+
+    const causesContainer = document.getElementById('res-causes');
+    causesContainer.innerHTML = '';
+    if (data.causes) {
+      data.causes.forEach(c => {
+        const prob = Math.round(c.probability * 100);
+        let html = `
+          <div class="bar-row">
+            <span>${c.name}</span>
+            <span>${prob}%</span>
+          </div>
+          <div class="bar-bg">
+            <div class="bar-fill" style="width: ${prob}%"></div>
+          </div>
+        `;
+        causesContainer.insertAdjacentHTML('beforeend', html);
+      });
+    }
+
+    document.getElementById('res-dag-age').textContent = data.dag_age_frames || '0';
+    document.getElementById('res-conf').textContent = (data.confidence || 0).toFixed(4);
+
+    document.getElementById('res-json').textContent = JSON.stringify(data, null, 2);
+
+    document.getElementById('latency-badge').textContent = `LATENCY: ${data.latency_ms ? data.latency_ms.toFixed(1) : '--'} ms`;
+  }
+</script>
+</body>
+</html>

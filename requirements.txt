@@ -16,3 +16,4 @@ rich
 tqdm
 matplotlib
 pandas
+dowhy==0.11.1

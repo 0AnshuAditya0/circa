@@ -1,0 +1,5 @@
+2026-03-05 17:11:30 | INFO     | [white]Initialized runtime safely bounded to: cpu[/white]
+2026-03-05 17:11:30 | INFO     | [white]Found existing synthetic causal dataset natively.[/white]
+2026-03-05 17:11:34 | INFO     | [white]Instantiated CNN-A Predictive Bounds. Tracked Params: 25,404,052[/white]
+2026-03-05 17:22:27 | METRIC   | [cyan]Epoch 1 Metrics[/cyan]: [bold cyan]TrainLoss=0.6091 | ValLoss=0.4050 | ValAUROC=0.9925[/bold cyan]
+2026-03-05 17:22:27 | SUCCESS  | [bold green][OK] Minted updated optimal AUC bounds safely (0.9925)[/bold green]

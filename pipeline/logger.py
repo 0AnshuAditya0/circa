@@ -50,21 +50,21 @@ class CIRCALogger:
     def info(self, msg: str):
         self._logger.info(f'[white]{msg}[/white]', extra={'markup': True})
     def success(self, msg: str):
-        self._logger.log(LEVEL_SUCCESS, f'[bold green]✓ {msg}[/bold green]', extra={'markup': True})
+        self._logger.log(LEVEL_SUCCESS, f'[bold green][OK] {msg}[/bold green]', extra={'markup': True})
     def warning(self, msg: str):
-        self._logger.warning(f'[bold yellow]⚠ {msg}[/bold yellow]', extra={'markup': True})
+        self._logger.warning(f'[bold yellow][!] {msg}[/bold yellow]', extra={'markup': True})
     def error(self, msg: str, exc_info=False):
-        self._logger.error(f'[bold red]❌ {msg}[/bold red]', exc_info=exc_info, extra={'markup': True})
+        self._logger.error(f'[bold red][X] {msg}[/bold red]', exc_info=exc_info, extra={'markup': True})
     def metric(self, key: str, value: any):
         msg = f'[cyan]{key}[/cyan]: [bold cyan]{value}[/bold cyan]'
         self._logger.log(LEVEL_METRIC, msg, extra={'markup': True})
     def causal(self, msg: str):
-        self._logger.log(LEVEL_CAUSAL, f'[bold magenta]∞ {msg}[/bold magenta]', extra={'markup': True})
+        self._logger.log(LEVEL_CAUSAL, f'[bold magenta][SCM] {msg}[/bold magenta]', extra={'markup': True})
     def stream(self, msg: str, frame_id: int=None):
         self._stream_counter += 1
-        formatted_msg = f'[blue]≈ {msg}[/blue]'
+        formatted_msg = f'[blue][~] {msg}[/blue]'
         if frame_id is not None:
-            formatted_msg = f'[blue]≈ [Frame {frame_id}] {msg}[/blue]'
+            formatted_msg = f'[blue][~] [Frame {frame_id}] {msg}[/blue]'
         self._logger.log(LEVEL_STREAM, formatted_msg, extra={'markup': True})
     def log_anomaly_report(self, report: dict):
         frame_id = report.get('frame_id', 'Unknown')

@@ -1,0 +1,3 @@
+2026-03-05 16:59:09 | INFO     | [white]Initialized runtime safely bounded to: cpu[/white]
+2026-03-05 16:59:09 | INFO     | [white]Found existing synthetic causal dataset natively.[/white]
+2026-03-05 16:59:32 | INFO     | [white]Instantiated CNN-A Predictive Bounds. Tracked Params: 25,404,052[/white]

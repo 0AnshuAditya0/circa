@@ -41,30 +41,28 @@ class AUROCEvaluator:
     def evaluate(self, dataloader: DataLoader, category: str = None) -> AUROCResult:
         y_true = []
         y_scores = []
-        
+
         with torch.no_grad():
             for x, y in dataloader:
                 x = x.to(self.device).float()
-                out = self.model(x)
-                
-                scores = out.score if hasattr(out, 'score') else out
-                if isinstance(scores, torch.Tensor):
-                    scores = scores.cpu().numpy()
-                elif not isinstance(scores, (list, np.ndarray)):
-                    scores = [scores]
-                
+
+                for i in range(x.shape[0]):
+                    img = x[i].unsqueeze(0)
+                    out = self.model(img)
+                    score = float(out.score) if hasattr(out, 'score') else float(out)
+                    y_scores.append(score)
+
                 y_true.extend(y.cpu().numpy() if isinstance(y, torch.Tensor) else y)
-                y_scores.extend(scores)
-                
+
         y_true = np.array(y_true)
         y_scores = np.array(y_scores)
-        
+
         auroc = float(roc_auc_score(y_true, y_scores))
         fpr, tpr, thresholds = roc_curve(y_true, y_scores)
-        
+
         optimal_idx = np.argmax(tpr - fpr)
         optimal_threshold = float(thresholds[optimal_idx])
-        
+
         return AUROCResult(
             auroc=auroc,
             fpr=fpr,

@@ -101,4 +101,4 @@ circa/
 
 ## Acknowledgements
 
-Built utilizing MVTec AD, PyTorch, Microsoft DoWhy, and OpenCV geometries.
+Built on MVTec AD, PyTorch, DoWhy, and OpenCV.
