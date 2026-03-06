@@ -3,6 +3,8 @@ from dataclasses import dataclass
 from typing import Tuple
 import networkx as nx
 import numpy as np
+import torch
+import torch.nn as nn
 from pipeline.config import CausalConfig
 from pipeline.logger import get_logger
 from causal.dag_builder import DAGBuilder
@@ -37,21 +39,71 @@ class StructureLearner:
     def _run_notears(self, data: np.ndarray) -> np.ndarray:
         n_samples, d = data.shape
         if d != self.n_clusters:
-            self.logger.warning(f'Learner input {d}d does not match config n_clusters {self.n_clusters}.')
-        correlation_matrix = np.corrcoef(data.T)
-        adjacency_matrix = np.where(np.abs(correlation_matrix) > self.lambda1, correlation_matrix, 0.0)
-        np.fill_diagonal(adjacency_matrix, 0.0)
-        return adjacency_matrix
+            self.logger.warning(f"Learner input {d}d does not match config n_clusters {self.n_clusters}.")
+        
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        X = torch.from_numpy(data.astype(np.float32)).to(device)
+        
+        W = nn.Parameter(torch.randn(d, d, device=device) * 0.01)
+        optimizer = torch.optim.Adam([W], lr=0.01)
+        
+        def dag_constraint(W_params):
+            M = W_params * W_params
+            E = torch.matrix_exp(M)
+            return torch.trace(E) - d
+
+        self.logger.info(f"Initiating NOTEARS-MLP optimization (d={d}) on {device}...")
+        
+        best_adj = None
+        min_loss = float('inf')
+        
+        for i in range(self.max_iter):
+            optimizer.zero_grad()
+            
+            # Reconstruction loss (MLP-like linear relationship)
+            X_hat = X @ W
+            recon_loss = 0.5 * torch.sum((X - X_hat) ** 2) / n_samples
+            
+            # L1 sparsity
+            l1_loss = self.lambda1 * torch.norm(W, 1)
+            
+            # Acyclicity constraint (Lagrangian-like penalty)
+            h_val = dag_constraint(W)
+            rho = 1e2 # Penalty strength
+            
+            total_loss = recon_loss + l1_loss + rho * h_val * h_val
+            
+            total_loss.backward()
+            optimizer.step()
+            
+            # Ensure no self-loops
+            with torch.no_grad():
+                W.diagonal().fill_(0)
+            
+            if i % 20 == 0:
+                self.logger.metric(f"NOTEARS Iter {i}", f"Loss={total_loss.item():.4f}, h={h_val.item():.2e}")
+
+        final_adj = W.detach().cpu().numpy()
+        return final_adj
+
     def _apply_constraints(self, adj: np.ndarray) -> nx.DiGraph:
         dag = self.dag_builder.build_empty_dag()
         d = adj.shape[0]
         nodes = list(dag.nodes())
+        
+        # Normalize weights for thresholding
+        max_abs = np.max(np.abs(adj))
+        if max_abs > 0:
+            adj = adj / max_abs
+
         if len(nodes) >= d:
             for i in range(d):
                 for j in range(d):
                     weight = adj[i, j]
+                    # Use a strict threshold for structure discovery
                     if np.abs(weight) > self.config.intervention_threshold:
                         dag.add_edge(nodes[i], nodes[j], weight=float(weight))
+        
         dag = self.dag_builder.apply_tier_constraints(dag)
         dag = self.dag_builder.apply_forbidden_edges(dag)
         dag = self.dag_builder.enforce_required_edges(dag)

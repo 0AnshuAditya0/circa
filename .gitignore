@@ -37,7 +37,13 @@ ENV/
 # Project
 data/raw/*
 !data/raw/.gitkeep
+data/raw/mvtec/
 data/processed/*
 !data/processed/.gitkeep
 perception/checkpoints/*
 !perception/checkpoints/.gitkeep
+pipeline/checkpoints/*
+!pipeline/checkpoints/.gitkeep
+logs/
+outputs/
+benchmarks/results/

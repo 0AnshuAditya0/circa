@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from sklearn.cluster import KMeans
-from pipeline.config import ModelConfig
+from pipeline.config import CausalConfig
 @dataclass
 class ClusterMapping:
     node_id: int
@@ -14,7 +14,7 @@ class ClusterMapping:
     confidence: float
     top_latent_dims: List[int]
 class FeatureClusterMapper:
-    def __init__(self, config: ModelConfig):
+    def __init__(self, config: CausalConfig):
         self.config = config
         self.n_clusters = config.n_causal_clusters
         self.kmeans = KMeans(n_clusters=self.n_clusters, random_state=42, n_init=10)

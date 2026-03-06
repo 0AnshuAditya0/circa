@@ -39,7 +39,7 @@ class CIRCAEngine:
             self.dag_builder.load_constraints(constraints_path)
         except Exception as e:
             self.logger.warning(f'Failed loading external DAG constraints schema: {e}. Executing unconstrained.')
-        self.cluster_mapper = FeatureClusterMapper(self.config.model)
+        self.cluster_mapper = FeatureClusterMapper(self.config.causal)
         self.structure_learner = StructureLearner(self.config.causal, self.dag_builder)
         self.windowed_learner = WindowedLearner(self.structure_learner, self.config.causal)
         self.snapshot_manager = SnapshotManager()

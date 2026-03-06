@@ -32,7 +32,6 @@ class ModelConfig(BaseModel):
     latent_dim: int = 64
     beta: float = 4.0
     anomaly_threshold: float = 0.5
-    n_causal_clusters: int = 16
 class CausalConfig(BaseModel):
     dag_update_interval: int = 500
     intervention_threshold: float = 0.15
@@ -40,6 +39,7 @@ class CausalConfig(BaseModel):
     notears_lambda1: float = 0.01
     notears_max_iter: int = 100
     time_slices: int = 3
+    n_causal_clusters: int = 16
 class StreamConfig(BaseModel):
     source: Union[int, str] = 0
     fps: int = 30

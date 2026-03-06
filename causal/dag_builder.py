@@ -26,21 +26,10 @@ class DAGBuilder:
         self.required_edges = {(edge[0], edge[1]) for edge in data.get('required_edges', [])}
     def build_empty_dag(self) -> nx.DiGraph:
         dag = nx.DiGraph()
-        base_nodes = []
         for tier_idx, nodes in enumerate(self.tiers):
-            base_nodes.extend(nodes)
-        if self.time_slices <= 1:
-            for tier_idx, nodes in enumerate(self.tiers):
-                for node in nodes:
-                    desc = self.node_descriptions.get(node, 'Unknown Vector')
-                    dag.add_node(node, tier=tier_idx, description=desc, time=0)
-            return dag
-        for t in range(self.time_slices):
-            for tier_idx, nodes in enumerate(self.tiers):
-                for node in nodes:
-                    t_node = f'{node}_t{t}'
-                    desc = self.node_descriptions.get(node, 'Unknown Vector')
-                    dag.add_node(t_node, tier=tier_idx, description=desc, time=t, base_name=node)
+            for node in nodes:
+                desc = self.node_descriptions.get(node, 'Unknown Vector')
+                dag.add_node(node, tier=tier_idx, description=desc)
         return dag
     def apply_tier_constraints(self, dag: nx.DiGraph) -> nx.DiGraph:
         edges_to_remove = []
