@@ -35,8 +35,9 @@ class ModelConfig(BaseModel):
 class CausalConfig(BaseModel):
     dag_update_interval: int = 500
     intervention_threshold: float = 0.15
+    structure_threshold: float = 0.3
     max_causes: int = 5
-    notears_lambda1: float = 0.01
+    notears_lambda1: float = 0.001
     notears_max_iter: int = 100
     time_slices: int = 3
     n_causal_clusters: int = 16

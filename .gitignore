@@ -1,4 +1,3 @@
-# Python
 __pycache__/
 *.py[cod]
 *$py.class
@@ -23,27 +22,33 @@ share/python-wheels/
 *.egg
 MANIFEST
 
-# Environment
 .env
 .venv
 venv/
 ENV/
 
-# PyTorch/Models
 *.pth
 *.pt
 *.ckpt
 
-# Project
 data/raw/*
 !data/raw/.gitkeep
-data/raw/mvtec/
 data/processed/*
 !data/processed/.gitkeep
 perception/checkpoints/*
 !perception/checkpoints/.gitkeep
 pipeline/checkpoints/*
 !pipeline/checkpoints/.gitkeep
-logs/
-outputs/
-benchmarks/results/
+logs/*
+!logs/.gitkeep
+outputs/*
+!outputs/.gitkeep
+benchmarks/results/*
+!benchmarks/results/.gitkeep
+
+test_pipeline.py
+.DS_Store
+*.swp
+*.bak
+abaqus.rpy
+abaqus_v6.env

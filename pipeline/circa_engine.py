@@ -93,19 +93,38 @@ class CIRCAEngine:
         active_snapshot: TemporalDAG = self.snapshot_manager.get_snapshot()
         flat_dag = active_snapshot.to_flat_dag()
         causes_list = []
+        
         if cnn_a_out.is_anomaly and flat_dag.number_of_edges() > 0:
-            z_np = cnn_b_out.mu.detach().cpu().numpy().flatten()
-            node_names = list(flat_dag.nodes())
-            dummy_data = {node: np.random.normal(loc=z_np[i % len(z_np)], size=100) for i, node in enumerate(node_names)}
             target_node = 'anomaly_score_output'
+            z_np = cnn_b_out.mu.detach().cpu().numpy().flatten()
+            
+            latest_t = self.config.causal.time_slices - 1
+            node_names = [n for n in flat_dag.nodes() if n.endswith(f'_t{latest_t}')]
+            
+            if not node_names:
+                node_names = list(flat_dag.nodes())
+
+            dummy_data = {node: np.random.normal(loc=z_np[i % len(z_np)], scale=0.1, size=50) for i, node in enumerate(node_names)}
             flat_dag.add_node(target_node, tier=99)
+            
             for node in node_names:
-                flat_dag.add_edge(node, target_node, weight=1.0)
-            dummy_data[target_node] = np.random.normal(loc=cnn_a_out.score, size=100)
+                if flat_dag.nodes[node].get('tier', 0) >= 1:
+                    flat_dag.add_edge(node, target_node, weight=1.0)
+            
+            if not list(flat_dag.predecessors(target_node)):
+                for node in node_names[:5]:
+                    flat_dag.add_edge(node, target_node, weight=1.0)
+
+            dummy_data[target_node] = np.random.normal(loc=float(cnn_a_out.score), scale=0.05, size=50)
             obs_df = pd.DataFrame(dummy_data)
-            raw_scores = self.do_engine.query_all(flat_dag, obs_df, target_node)
-            causes_list = self.ranker.rank(raw_scores)
-            causes_list = self.ranker.filter_significant(causes_list)
+            
+            try:
+                raw_scores = self.do_engine.query_all(flat_dag, obs_df, target_node)
+                causes_list = self.ranker.rank(raw_scores)
+                causes_list = self.ranker.filter_significant(causes_list)
+            except Exception as e:
+                self.logger.warning(f"SCM Interventional query failed: {e}")
+        
         report = self.report_builder.build(frame_id, tensor_frame, cnn_a_out, cnn_b_out, causes_list)
         return report
     def _slow_loop(self, frame_id: int, latent_vector: torch.Tensor) -> None:

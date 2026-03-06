@@ -33,6 +33,8 @@ from data.synthetic_generator import CausalDatasetGenerator, CausalDataset
 from benchmarks.auroc_eval import AUROCEvaluator
 from sklearn.metrics import precision_recall_fscore_support
 
+import argparse
+
 def map_node_to_cause(node_name: str, dag_builder: DAGBuilder) -> str | None:
     tier = dag_builder.get_node_tier(node_name)
     return {0: "V1", 1: "V2", 2: "V3"}.get(tier, None)
@@ -45,6 +47,10 @@ def set_seeds(seed: int = 42):
         torch.cuda.manual_seed_all(seed)
 
 def main():
+    parser = argparse.ArgumentParser(description="CIRCA Full Pipeline Experiment")
+    parser.add_argument("--eval-only", action="store_true", help="Skip training (CNN-B) if checkpoint exists")
+    args = parser.parse_args()
+
     config = get_config()
     logger = get_logger()
     console = logger.console
@@ -85,10 +91,10 @@ def main():
 
         logger.info("Step 4: Train CNN-B -> Training CausalEncoder (beta-VAE)")
         cnn_b = CausalEncoder(config.model).to(device)
-        # Check if already exists to skip retraining if user just wanted fix (optional, but requested no training if possible)
         cnn_b_path = config.paths.checkpoint_dir / "causal_encoder_best.pt"
-        if cnn_b_path.exists():
-            logger.info("Loading existing CNN-B checkpoint...")
+        
+        if (args.eval_only and cnn_b_path.exists()) or cnn_b_path.exists():
+            logger.info("Skipping CNN-B training: loading existing checkpoint...")
             cnn_b.load_state_dict(torch.load(cnn_b_path, map_location=device))
         else:
             optimizer_b = torch.optim.Adam(cnn_b.parameters(), lr=config.model.learning_rate)
@@ -124,8 +130,9 @@ def main():
         logger.info("Step 5: Fit Cluster Mapper -> Training FeatureClusterMapper")
         mapper = FeatureClusterMapper(config.causal)
         mapper_path = config.paths.project_root / "pipeline" / "checkpoints" / "cluster_mapper.pkl"
-        if mapper_path.exists():
-            logger.info("Loading existing Cluster Mapper...")
+        
+        if (args.eval_only and mapper_path.exists()) or mapper_path.exists():
+            logger.info("Skipping Mapper fitting: loading existing cluster model...")
             mapper.load(mapper_path)
         else:
             mapper.fit(latent_vectors)
@@ -138,8 +145,13 @@ def main():
         dag_path = config.paths.project_root / "causal" / "graphs" / "mvtec_dag.json"
         dag_builder.load_constraints(dag_path)
         
+        # RUN ON CLUSTER SPACE: Transform 64d latents into 16d cluster-similarity features
+        # This makes the learned DAG nodes directly correspond to the causal_node_X clusters
+        cluster_distances = mapper.kmeans.transform(latent_vectors)
+        cluster_features = 1.0 / (1.0 + cluster_distances) # Similarity-based features (N, 16)
+        
         learner = StructureLearner(config.causal, dag_builder)
-        learning_res = learner.fit(latent_vectors)
+        learning_res = learner.fit(cluster_features)
         
         snapshot_mgr = SnapshotManager()
         temp_dag = TemporalDAG(config.causal, learning_res.dag)
@@ -167,8 +179,9 @@ def main():
         heatmap_dir = config.paths.project_root / "outputs" / "heatmaps"
         heatmap_dir.mkdir(parents=True, exist_ok=True)
 
-        # Optimization: use a subset of training data for Do-calculus to speed up
-        obs_df = pd.DataFrame(latent_vectors[:200], columns=[f"causal_node_{j}_t0" for j in range(latent_vectors.shape[1])])
+        # Optimization: use training cluster features for Do-calculus observational data
+        # This ensures the intervention nodes exist in the columns
+        obs_df = pd.DataFrame(cluster_features[:200], columns=[f"causal_node_{j}_t0" for j in range(cluster_features.shape[1])])
 
         for i, (x_tensor, label_tensor) in enumerate(tqdm(test_loader, desc="Inference")):
             sample = test_ds.samples[i]
@@ -185,6 +198,8 @@ def main():
             
             # Use only the current time slice for simplified experiment inference
             current_slice_dag = temp_dag.get_slice(0)
+            logger.info(f"DAG nodes sample: {list(current_slice_dag.nodes())[:5]}")
+            logger.info(f"obs_df columns: {list(obs_df.columns)[:5]}")
             scores = engine.query_all(current_slice_dag, obs_df, target_node)
             ranked_causes = ranker.rank(scores)
             significant_causes = ranker.filter_significant(ranked_causes)

@@ -60,23 +60,19 @@ class StructureLearner:
         for i in range(self.max_iter):
             optimizer.zero_grad()
             
-            # Reconstruction loss (MLP-like linear relationship)
             X_hat = X @ W
             recon_loss = 0.5 * torch.sum((X - X_hat) ** 2) / n_samples
             
-            # L1 sparsity
             l1_loss = self.lambda1 * torch.norm(W, 1)
             
-            # Acyclicity constraint (Lagrangian-like penalty)
             h_val = dag_constraint(W)
-            rho = 1e2 # Penalty strength
+            rho = 1e2 
             
             total_loss = recon_loss + l1_loss + rho * h_val * h_val
             
             total_loss.backward()
             optimizer.step()
             
-            # Ensure no self-loops
             with torch.no_grad():
                 W.diagonal().fill_(0)
             
@@ -91,18 +87,27 @@ class StructureLearner:
         d = adj.shape[0]
         nodes = list(dag.nodes())
         
-        # Normalize weights for thresholding
         max_abs = np.max(np.abs(adj))
         if max_abs > 0:
             adj = adj / max_abs
 
-        if len(nodes) >= d:
-            for i in range(d):
-                for j in range(d):
-                    weight = adj[i, j]
-                    # Use a strict threshold for structure discovery
-                    if np.abs(weight) > self.config.intervention_threshold:
-                        dag.add_edge(nodes[i], nodes[j], weight=float(weight))
+        d_limit = min(d, len(nodes))
+        candidate_edges = []
+        for i in range(d_limit):
+            for j in range(d_limit):
+                if i == j: continue
+                weight = adj[i, j]
+                if np.abs(weight) > self.config.structure_threshold:
+                    candidate_edges.append((nodes[i], nodes[j], float(weight)))
+        
+        n_nodes = len(nodes)
+        K = min(n_nodes * 2, len(candidate_edges))
+        if candidate_edges:
+            candidate_edges.sort(key=lambda x: abs(x[2]), reverse=True)
+            top_edges = candidate_edges[:K]
+            for u, v, w in top_edges:
+                dag.add_edge(u, v, weight=w)
+            self.logger.info(f"Integrated {len(top_edges)} top-weighted learned edges into expert template.")
         
         dag = self.dag_builder.apply_tier_constraints(dag)
         dag = self.dag_builder.apply_forbidden_edges(dag)
@@ -111,20 +116,24 @@ class StructureLearner:
     def _enforce_acyclicity(self, dag: nx.DiGraph) -> nx.DiGraph:
         while not nx.is_directed_acyclic_graph(dag):
             try:
-                cycle = nx.find_cycle(dag, orientation='original')
+                cycle_edges = nx.find_cycle(dag, orientation='original')
                 weakest_edge = None
                 lowest_weight = float('inf')
-                for u, v in cycle:
+                
+                for edge in cycle_edges:
+                    u, v = edge[0], edge[1]
                     weight = abs(dag.edges[u, v].get('weight', 1.0))
                     if weight < lowest_weight:
                         lowest_weight = weight
                         weakest_edge = (u, v)
+                
                 if weakest_edge:
-                    self.logger.warning(f'Acyclicity break: Removing cyclic loop edge {weakest_edge}')
-                    dag.remove_edge(*weakest_edge)
+                    u, v = weakest_edge
+                    self.logger.warning(f'Acyclicity break: Removing cyclic loop edge {u} -> {v}')
+                    dag.remove_edge(u, v)
                 else:
                     break
-            except nx.NetworkXNoCycle:
+            except (nx.NetworkXNoCycle, nx.NetworkXError):
                 break
         return dag
     def score(self, dag: nx.DiGraph, data: np.ndarray) -> float:

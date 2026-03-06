@@ -62,8 +62,28 @@
             "causal_node_7"
         ],
         [
+            "causal_node_2",
+            "causal_node_8"
+        ],
+        [
+            "causal_node_3",
+            "causal_node_10"
+        ],
+        [
             "causal_node_5",
             "causal_node_12"
+        ],
+        [
+            "causal_node_7",
+            "causal_node_11"
+        ],
+        [
+            "causal_node_8",
+            "causal_node_15"
+        ],
+        [
+            "causal_node_10",
+            "causal_node_13"
         ]
     ],
     "node_descriptions": {
