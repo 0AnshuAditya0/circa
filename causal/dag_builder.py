@@ -24,6 +24,13 @@ class DAGBuilder:
         self.node_descriptions = data.get('node_descriptions', {})
         self.forbidden_edges = {(edge[0], edge[1]) for edge in data.get('forbidden_edges', [])}
         self.required_edges = {(edge[0], edge[1]) for edge in data.get('required_edges', [])}
+
+    def get_node_tier(self, node_name: str) -> int | None:
+        base_name = node_name.split('_t')[0]
+        for tier_idx, nodes in enumerate(self.tiers):
+            if base_name in nodes:
+                return tier_idx
+        return None
     def build_empty_dag(self) -> nx.DiGraph:
         dag = nx.DiGraph()
         for tier_idx, nodes in enumerate(self.tiers):

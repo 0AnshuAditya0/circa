@@ -33,6 +33,10 @@ from data.synthetic_generator import CausalDatasetGenerator, CausalDataset
 from benchmarks.auroc_eval import AUROCEvaluator
 from sklearn.metrics import precision_recall_fscore_support
 
+def map_node_to_cause(node_name: str, dag_builder: DAGBuilder) -> str | None:
+    tier = dag_builder.get_node_tier(node_name)
+    return {0: "V1", 1: "V2", 2: "V3"}.get(tier, None)
+
 def set_seeds(seed: int = 42):
     random.seed(seed)
     np.random.seed(seed)
@@ -77,33 +81,34 @@ def main():
         for param in cnn_a.parameters():
             param.requires_grad = False
         cnn_a.eval()
-        logger.success("CNN-A loaded and frozen \u2713")
+        logger.success("CNN-A loaded and frozen ✓")
 
         logger.info("Step 4: Train CNN-B -> Training CausalEncoder (beta-VAE)")
         cnn_b = CausalEncoder(config.model).to(device)
-        optimizer_b = torch.optim.Adam(cnn_b.parameters(), lr=config.model.learning_rate)
-        
-        train_loader = DataLoader(train_ds.to_torch_dataset(), batch_size=config.model.batch_size, shuffle=True)
-        epochs_b = 10
-        
-        for epoch in range(epochs_b):
-            cnn_b.train()
-            total_loss = 0.0
-            pbar = tqdm(train_loader, desc=f"CNN-B Epoch {epoch+1}/{epochs_b}")
-            for x, _ in pbar:
-                x = x.to(device)
-                optimizer_b.zero_grad()
-                loss, recon, kl = cnn_b.compute_loss(x)
-                loss.backward()
-                optimizer_b.step()
-                total_loss += loss.item()
-                pbar.set_postfix({"loss": f"{loss.item():.4f}"})
-            
-            logger.metric(f"CNN-B Epoch {epoch+1}", f"Loss={total_loss/len(train_loader):.4f}")
-
+        # Check if already exists to skip retraining if user just wanted fix (optional, but requested no training if possible)
         cnn_b_path = config.paths.checkpoint_dir / "causal_encoder_best.pt"
-        torch.save(cnn_b.state_dict(), cnn_b_path)
-        logger.success(f"CNN-B trained and saved to {cnn_b_path}")
+        if cnn_b_path.exists():
+            logger.info("Loading existing CNN-B checkpoint...")
+            cnn_b.load_state_dict(torch.load(cnn_b_path, map_location=device))
+        else:
+            optimizer_b = torch.optim.Adam(cnn_b.parameters(), lr=config.model.learning_rate)
+            train_loader = DataLoader(train_ds.to_torch_dataset(), batch_size=config.model.batch_size, shuffle=True)
+            epochs_b = 10
+            for epoch in range(epochs_b):
+                cnn_b.train()
+                total_loss = 0.0
+                pbar = tqdm(train_loader, desc=f"CNN-B Epoch {epoch+1}/{epochs_b}")
+                for x, _ in pbar:
+                    x = x.to(device)
+                    optimizer_b.zero_grad()
+                    loss, recon, kl = cnn_b.compute_loss(x)
+                    loss.backward()
+                    optimizer_b.step()
+                    total_loss += loss.item()
+                    pbar.set_postfix({"loss": f"{loss.item():.4f}"})
+                logger.metric(f"CNN-B Epoch {epoch+1}", f"Loss={total_loss/len(train_loader):.4f}")
+            torch.save(cnn_b.state_dict(), cnn_b_path)
+            logger.success(f"CNN-B trained and saved to {cnn_b_path}")
 
         logger.info("Extracting latent vectors for DAG learning...")
         cnn_b.eval()
@@ -118,10 +123,14 @@ def main():
 
         logger.info("Step 5: Fit Cluster Mapper -> Training FeatureClusterMapper")
         mapper = FeatureClusterMapper(config.causal)
-        mapper.fit(latent_vectors)
         mapper_path = config.paths.project_root / "pipeline" / "checkpoints" / "cluster_mapper.pkl"
-        mapper.save(mapper_path)
-        logger.success(f"Cluster Mapper fitted and saved to {mapper_path}")
+        if mapper_path.exists():
+            logger.info("Loading existing Cluster Mapper...")
+            mapper.load(mapper_path)
+        else:
+            mapper.fit(latent_vectors)
+            mapper.save(mapper_path)
+            logger.success(f"Cluster Mapper fitted and saved to {mapper_path}")
         logger.info(f"Cluster Summary: {config.causal.n_causal_clusters} clusters")
 
         logger.info("Step 6: Learn Causal Structure -> Running StructureLearner")
@@ -154,10 +163,12 @@ def main():
         
         inf_start = time.perf_counter()
         
-        # Track 5 heatmaps for saving
         heatmap_count = 0
         heatmap_dir = config.paths.project_root / "outputs" / "heatmaps"
         heatmap_dir.mkdir(parents=True, exist_ok=True)
+
+        # Optimization: use a subset of training data for Do-calculus to speed up
+        obs_df = pd.DataFrame(latent_vectors[:200], columns=[f"causal_node_{j}_t0" for j in range(latent_vectors.shape[1])])
 
         for i, (x_tensor, label_tensor) in enumerate(tqdm(test_loader, desc="Inference")):
             sample = test_ds.samples[i]
@@ -168,23 +179,17 @@ def main():
                 out_b = cnn_b(x_tensor)
             
             z_mu, _ = cnn_b.encode(x_tensor)
+            cluster_id = mapper.map_to_node(z_mu)
+            target_node_base = f"causal_node_{cluster_id}"
+            target_node = f"{target_node_base}_t0"
             
-            # For interventional query, we need a dataframe of observations
-            # We'll use a subset of training latents as the baseline data
-            obs_df = pd.DataFrame(latent_vectors[:200], columns=[f"causal_node_{j}" for j in range(latent_vectors.shape[1])])
-            
-            # Map test z to nodes for intervention
-            # Here we simplify: query effects on the target node from all others
-            # In a real run, target_node would be the most symptomatic node
-            target_node = f"causal_node_{mapper.map_to_node(z_mu)}"
-            
-            scores = engine.query_all(temp_dag.to_flat_dag(), obs_df, target_node)
+            # Use only the current time slice for simplified experiment inference
+            current_slice_dag = temp_dag.get_slice(0)
+            scores = engine.query_all(current_slice_dag, obs_df, target_node)
             ranked_causes = ranker.rank(scores)
             significant_causes = ranker.filter_significant(ranked_causes)
             
-            # Prepare dummy frame for report builder (numpy expected)
             frame_np = (x_tensor.squeeze(0).permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8)
-            
             report = report_builder.build(frame_id=i, frame=x_tensor, cnn_a_output=out_a, cnn_b_output=out_b, causes=significant_causes)
             test_reports.append(report)
             
@@ -193,20 +198,20 @@ def main():
             
             if sample.label == 1:
                 y_cause_true.append(sample.true_cause)
-                pred_cause = "Unknown"
+                pred_cause = None
                 if significant_causes:
-                    # Map causal_node_X back to V1/V2/V3 if possible for eval
-                    # Simplified mapping for experiment: 
-                    # node 0-4 -> V1, node 5-10 -> V2, node 11-15 -> V3
-                    node_id = significant_causes[0].node_id
-                    if 0 <= node_id <= 4: pred_cause = "V1"
-                    elif 5 <= node_id <= 10: pred_cause = "V2"
-                    else: pred_cause = "V3"
+                    pred_cause = map_node_to_cause(significant_causes[0].node_name, dag_builder)
+                else:
+                    # Fallback: if no other node is a cause, the anomalous node itself is the root
+                    pred_cause = map_node_to_cause(target_node, dag_builder)
                 y_cause_pred.append(pred_cause)
                 
+                if i < 20 and len(y_cause_pred) <= 5:
+                    match = (pred_cause == sample.true_cause)
+                    logger.info(f"Debug Inference: Sample {i}: predicted={pred_cause}, true={sample.true_cause}, match={match}")
+            
             if heatmap_count < 5 and out_a.is_anomaly:
                 import cv2
-                # explanation.gradcam_plus has overlay
                 overlay_img = gradcam.overlay(report.heatmap, frame_np)
                 cv2.imwrite(str(heatmap_dir / f"anomaly_{heatmap_count}.png"), cv2.cvtColor(overlay_img, cv2.COLOR_RGB2BGR))
                 heatmap_count += 1
@@ -229,7 +234,6 @@ def main():
         v2_acc = sum(1 for i in v2_indices if y_cause_pred[i] == "V2") / len(v2_indices) if v2_indices else 0.0
         v3_acc = sum(1 for i in v3_indices if y_cause_pred[i] == "V3") / len(v3_indices) if v3_indices else 0.0
 
-        # F1 Score
         y_pred = [1 if s > 0.5 else 0 for s in y_score]
         prec, rec, f1, _ = precision_recall_fscore_support(y_true, y_pred, average='binary', zero_division=0)
 
@@ -287,16 +291,6 @@ def main():
         logger.info("Step 11: Connect to Dashboard")
         logger.info("Dashboard auto-reads from benchmarks/results/full_circa_results.json. Connection verified.")
 
-    except ImportError as e:
-        if 'causalnex' in str(e):
-            logger.error("Requirement 'causalnex' missing.")
-            print("Please run: pip install causalnex")
-        else:
-            logger.error(f"Import error: {str(e)}")
-        sys.exit(1)
-    except torch.cuda.OutOfMemoryError:
-        logger.error("CUDA OOM detected. Retry with half batch size.")
-        # Manual adjustment would be required here or recursive retry logic
     except Exception as e:
         logger.error(f"Stage failed with error: {str(e)}")
         import traceback
